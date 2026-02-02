@@ -10,6 +10,11 @@ export const parseMarkdown = (text: string): string => {
     .replace(/^### (.*$)/gm, '<h3 class="text-lg font-semibold text-slate-800 mb-2 mt-4 font-sans">$1</h3>')
     .replace(/^## (.*$)/gm, '<h2 class="text-xl font-semibold text-slate-800 mb-3 mt-5 font-sans">$1</h2>')
     .replace(/^# (.*$)/gm, '<h1 class="text-2xl font-bold text-slate-800 mb-4 mt-6 font-sans">$1</h1>')
+    // Images
+    .replace(
+      /!\[([^\]]*)\]\(([^)\s]+)\)/g,
+      '<img src="$2" alt="$1" class="max-w-full h-auto rounded-2xl border border-slate-200 my-4" />',
+    )
     // Bold and italic
     .replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-slate-900 font-sans">$1</strong>')
     .replace(/\*(.*?)\*/g, '<em class="italic text-slate-800 font-sans">$1</em>')
@@ -37,7 +42,10 @@ export const parseMarkdown = (text: string): string => {
     : `<p class="mb-4 leading-relaxed text-slate-700">${result}</p>`
 
   // Fix list wrapping - more robust regex
-  const finalResult = wrappedResult.replace(/((?:<li class="[^"]*">.*?<\/li>\s*)+)/gs, '<ul class="list-inside space-y-1 my-2 ml-4">$1</ul>')
+  const finalResult = wrappedResult.replace(
+    /((?:<li class="[^"]*">[\s\S]*?<\/li>\s*)+)/g,
+    '<ul class="list-inside space-y-1 my-2 ml-4">$1</ul>',
+  )
 
   cache.set(text, finalResult)
   return finalResult

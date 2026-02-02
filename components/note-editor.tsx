@@ -5,9 +5,12 @@ import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { X, PenTool, Bold, Italic, List, ListOrdered, Quote, Code, Heading1, Heading2, Heading3 } from "lucide-react"
+import { ImagePlus, X, PenTool, Bold, Italic, List, ListOrdered, Quote, Code, Heading1, Heading2, Heading3 } from "lucide-react"
 import ExcalidrawModal from "./excalidraw-modal"
 import dynamic from "next/dynamic"
+import MediaHtml from "@/components/media-html"
+import { putImage } from "@/lib/media-store"
+import type { SlashCommand } from "@/lib/types"
 
 // Dynamically import DrawingViewer with SSR disabled
 const DrawingViewer = dynamic(() => import('./drawing-viewer'), {
@@ -27,11 +30,17 @@ interface NoteEditorProps {
   isOpen: boolean
   editingNote: Note | null
   newNote: { title: string; content: string; drawings?: string[] }
+  showSlashMenu?: boolean
+  selectedCommandIndex?: number
+  slashCommands?: SlashCommand[]
   previewContent: string | null
   onClose: () => void
   onSave: () => void
   onTitleChange: (title: string) => void
   onContentChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void
+  onCommandSelect?: (command: SlashCommand) => void
+  onSlashMenuNavigate?: (direction: "up" | "down") => void
+  onSlashMenuClose?: () => void
   onDrawingAdd?: (drawingData: string) => void
   onDrawingUpdate?: (index: number, drawingData: string) => void
   onDrawingDelete?: (index: number) => void
@@ -47,14 +56,22 @@ const NoteEditor = React.memo<NoteEditorProps>(
     onSave,
     onTitleChange,
     onContentChange,
+    showSlashMenu,
+    selectedCommandIndex,
+    slashCommands,
+    onCommandSelect,
+    onSlashMenuNavigate,
+    onSlashMenuClose,
     onDrawingAdd,
     onDrawingUpdate,
     onDrawingDelete,
   }) => {
     const textareaRef = useRef<HTMLTextAreaElement>(null)
+    const fileInputRef = useRef<HTMLInputElement>(null)
     const [showDrawingModal, setShowDrawingModal] = useState(false)
     const [editingDrawingIndex, setEditingDrawingIndex] = useState<number | null>(null)
     const [showShortcuts, setShowShortcuts] = useState(false)
+    const [isUploadingImage, setIsUploadingImage] = useState(false)
 
     const isDisabled = useMemo(() => {
       return !newNote.title.trim() || !newNote.content.trim()
@@ -119,7 +136,7 @@ const NoteEditor = React.memo<NoteEditorProps>(
       
       // Trigger content change
       const event = {
-        target: { value: newContent }
+        target: { value: newContent, selectionStart: newCursorPos, selectionEnd: newCursorPos }
       } as React.ChangeEvent<HTMLTextAreaElement>
       onContentChange(event)
 
@@ -131,6 +148,59 @@ const NoteEditor = React.memo<NoteEditorProps>(
         }
       }, 0)
     }, [onContentChange])
+
+    const insertTextAtCursor = useCallback(
+      (textToInsert: string) => {
+        if (!textareaRef.current) return
+
+        const textarea = textareaRef.current
+        const start = textarea.selectionStart
+        const end = textarea.selectionEnd
+        const currentContent = newNote.content
+        
+        const newContent = currentContent.substring(0, start) + textToInsert + currentContent.substring(end)
+        const newCursorPos = start + textToInsert.length
+        const event = {
+          target: { value: newContent, selectionStart: newCursorPos, selectionEnd: newCursorPos },
+        } as React.ChangeEvent<HTMLTextAreaElement>
+        onContentChange(event)
+
+        setTimeout(() => {
+          if (!textareaRef.current) return
+          textareaRef.current.focus()
+          textareaRef.current.setSelectionRange(newCursorPos, newCursorPos)
+        }, 0)
+      },
+      [newNote.content, onContentChange],
+    )
+
+    const handleAttachImageClick = useCallback(() => {
+      fileInputRef.current?.click()
+    }, [])
+
+    const handleFileChange = useCallback(
+      async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        e.target.value = ""
+
+        if (!file) return
+
+        const allowed = ["image/png", "image/jpeg", "image/gif", "image/webp"]
+        if (!allowed.includes(file.type)) return
+
+        try {
+          setIsUploadingImage(true)
+          const id = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`
+          await putImage(file, id)
+
+          const safeAlt = file.name.replace(/\n/g, " ").trim() || "image"
+          insertTextAtCursor(`\n![${safeAlt}](media:${id})\n`)
+        } finally {
+          setIsUploadingImage(false)
+        }
+      },
+      [insertTextAtCursor],
+    )
 
     // Handle keyboard shortcuts
     const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -257,7 +327,7 @@ const NoteEditor = React.memo<NoteEditorProps>(
             currentContent.substring(end)
           
           const event = {
-            target: { value: newContent }
+            target: { value: newContent, selectionStart: start + drawingPlaceholder.length, selectionEnd: start + drawingPlaceholder.length }
           } as React.ChangeEvent<HTMLTextAreaElement>
           onContentChange(event)
         }
@@ -277,7 +347,7 @@ const NoteEditor = React.memo<NoteEditorProps>(
         const updatedContent = newNote.content.replace(drawingBlock, '')
         
         const event = {
-          target: { value: updatedContent }
+          target: { value: updatedContent, selectionStart: 0, selectionEnd: 0 }
         } as React.ChangeEvent<HTMLTextAreaElement>
         onContentChange(event)
       }
@@ -299,7 +369,7 @@ const NoteEditor = React.memo<NoteEditorProps>(
           currentContent.substring(end)
         
         const event = {
-          target: { value: newContent }
+          target: { value: newContent, selectionStart: start + drawingPlaceholder.length, selectionEnd: start + drawingPlaceholder.length }
         } as React.ChangeEvent<HTMLTextAreaElement>
         onContentChange(event)
         
@@ -444,6 +514,23 @@ const NoteEditor = React.memo<NoteEditorProps>(
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-medium text-slate-700">Write</h3>
                     <div className="flex items-center gap-2">
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/gif,image/webp"
+                        className="hidden"
+                        onChange={handleFileChange}
+                      />
+                      <Button
+                        onClick={handleAttachImageClick}
+                        variant="ghost"
+                        size="icon"
+                        className="text-slate-500 hover:text-orange-600"
+                        title="Attach image"
+                        disabled={isUploadingImage}
+                      >
+                        <ImagePlus className="w-4 h-4" />
+                      </Button>
                       <Button
                         onClick={insertDrawingAtCursor}
                         variant="ghost"
@@ -489,10 +576,7 @@ const NoteEditor = React.memo<NoteEditorProps>(
                       <h1 className="text-2xl font-bold text-slate-800 mb-6 font-sans">{newNote.title}</h1>
                     )}
                     {previewContent ? (
-                      <div
-                        className="text-slate-700 leading-relaxed font-sans"
-                        dangerouslySetInnerHTML={{ __html: previewContent }}
-                      />
+                      <MediaHtml html={previewContent} className="text-slate-700 leading-relaxed font-sans" />
                     ) : (
                       <p className="text-slate-400 italic font-sans">Start writing to see preview...</p>
                     )}
@@ -519,7 +603,7 @@ const NoteEditor = React.memo<NoteEditorProps>(
                           const drawingBlock = `\`\`\`drawing\n${drawing}\n\`\`\``
                           const updatedContent = newNote.content.replace(drawingBlock, '')
                           const event = {
-                            target: { value: updatedContent }
+                            target: { value: updatedContent, selectionStart: 0, selectionEnd: 0 }
                           } as React.ChangeEvent<HTMLTextAreaElement>
                           onContentChange(event)
                         }}

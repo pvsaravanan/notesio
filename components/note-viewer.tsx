@@ -7,6 +7,7 @@ import { X, Edit3 } from "lucide-react"
 import dynamic from "next/dynamic" // Import dynamic
 // import DrawingViewer from "./drawing-viewer" // Remove direct import
 import ExcalidrawModal from "./excalidraw-modal"
+import MediaHtml from "@/components/media-html"
 import { parseMarkdown } from "../lib/markdown-parser"
 
 // Dynamically import DrawingViewer with SSR disabled
@@ -60,10 +61,10 @@ const NoteViewer = React.memo<NoteViewerProps>(({
             const formattedContent = parseMarkdown(textContent)
             
             elements.push(
-              <div
+              <MediaHtml
                 key={`text-${i}`}
+                html={formattedContent}
                 className="text-slate-700 leading-relaxed text-lg font-sans mb-6"
-                dangerouslySetInnerHTML={{ __html: formattedContent }}
               />
             )
           } catch (error) {
@@ -84,10 +85,10 @@ const NoteViewer = React.memo<NoteViewerProps>(({
               : `<p class="mb-4 leading-relaxed text-slate-700">${fallbackContent}</p>`
             
             elements.push(
-              <div
+              <MediaHtml
                 key={`text-${i}`}
+                html={wrappedContent}
                 className="text-slate-700 leading-relaxed text-lg font-sans mb-6"
-                dangerouslySetInnerHTML={{ __html: wrappedContent }}
               />
             )
           }
