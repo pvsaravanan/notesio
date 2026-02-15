@@ -37,7 +37,7 @@ export const Hero = () => {
         {/* Title - centered but shifted slightly left */}
         <div className="-ml-20 sm:-ml-28 md:-ml-40 mt-16 short:mt-12 sm:mt-24 md:mt-32">
           <motion.h1
-            className="font-serif text-7xl short:text-6xl italic sm:text-8xl md:text-9xl text-foreground"
+            className="font-serif text-7xl short:text-6xl italic sm:text-8xl md:text-9xl text-white!"
             initial="hidden"
             animate="visible"
             variants={{
@@ -62,7 +62,7 @@ export const Hero = () => {
 
         {/* Description - positioned on the right side */}
         <motion.div
-          className="absolute right-10 md:right-16 lg:right-24 top-[30%] short:top-[25%] font-serif text-xl short:text-lg italic sm:text-2xl md:text-3xl lg:text-4xl text-foreground max-w-[200px] md:max-w-[240px] lg:max-w-[280px] text-left"
+          className="absolute right-10 md:right-16 lg:right-24 top-[30%] short:top-[25%] font-serif text-xl short:text-lg italic sm:text-2xl md:text-3xl lg:text-4xl text-white! max-w-[200px] md:max-w-[240px] lg:max-w-[280px] text-left"
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.5, ease: EASE_OUT, delay: captionDelay }}
