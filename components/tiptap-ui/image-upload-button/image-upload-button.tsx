@@ -24,8 +24,7 @@ type IconProps = React.SVGProps<SVGSVGElement>
 type IconComponent = ({ className, ...props }: IconProps) => React.ReactElement
 
 export interface ImageUploadButtonProps
-  extends Omit<ButtonProps, "type">,
-    UseImageUploadConfig {
+  extends Omit<ButtonProps, "type">, UseImageUploadConfig {
   /**
    * Optional text to display alongside the icon.
    */
@@ -105,7 +104,7 @@ export const ImageUploadButton = forwardRef<
     return (
       <Button
         type="button"
-        data-style="ghost"
+        variant="ghost"
         data-active-state={isActive ? "on" : "off"}
         role="button"
         tabIndex={-1}

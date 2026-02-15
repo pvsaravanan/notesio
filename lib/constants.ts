@@ -1,6 +1,5 @@
-// c:\proj\notesio\clarify_landingpage\lib\constants.ts
-export { socialLinks } from "../clarify_landingpage/lib/constants";
-
-export const TABLES = {
-  EMAIL_LIST: "email-list",
+export const socialLinks = {
+  instagram: "https://www.instagram.com/12ocaffeine/",
+  x: "https://x.com/12ocaffeine",
+  gmail: "mailto:12ocaffeine@gmail.com",
 };

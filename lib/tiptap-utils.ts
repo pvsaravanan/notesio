@@ -374,17 +374,17 @@ export const handleImageUpload = async (
     )
   }
 
-  // For demo/testing: return a local object URL so the inserted image can preview immediately.
-  // In production, replace this with your real upload implementation and return the hosted URL.
-  for (let progress = 0; progress <= 100; progress += 20) {
+  // For demo/testing: Simulate upload progress. In production, replace the following code
+  // with your own upload implementation.
+  for (let progress = 0; progress <= 100; progress += 10) {
     if (abortSignal?.aborted) {
       throw new Error("Upload cancelled")
     }
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    await new Promise((resolve) => setTimeout(resolve, 500))
     onProgress?.({ progress })
   }
 
-  return URL.createObjectURL(file)
+  return "/images/tiptap-ui-placeholder-image.jpg"
 }
 
 type ProtocolOptions = {

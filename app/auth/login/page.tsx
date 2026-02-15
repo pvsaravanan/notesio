@@ -11,7 +11,7 @@ import { Loader2, Mail, Lock, Eye, EyeOff, LogIn, Chrome } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { auth, googleProvider } from "@/lib/firebase"
-import { signInWithEmailAndPassword, signInWithPopup } from "firebase/auth"
+import { signInWithEmailAndPassword, signInWithPopup, onAuthStateChanged } from "firebase/auth"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -23,7 +23,7 @@ export default function LoginPage() {
   const router = useRouter()
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((user) => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         router.push("/notes")
       }

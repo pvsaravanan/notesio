@@ -5,8 +5,7 @@ import "./globals.css"
 
 export const metadata: Metadata = {
   title: "Clarify",
-  description: "A minimal Medium-like personal notes app",
-  generator: "v0.app",
+  description: "A minimal Medium-like personal notes app"
 }
 
 export default function RootLayout({

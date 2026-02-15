@@ -1,3 +1,3 @@
 "use client"
 
-export { Hero } from "@/clarify_landingpage/components/hero"
+export { Hero } from "@/components/hero-with-auth"

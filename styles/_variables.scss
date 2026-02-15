@@ -190,7 +190,7 @@
 
 /* Global colors - Dark mode */
 .dark {
-  --tt-bg-color: var(--black);
+  --tt-bg-color: var(--editor-bg, #121212);
   --tt-border-color: var(--tt-gray-dark-a-200);
   --tt-border-color-tint: var(--tt-gray-dark-a-100);
   --tt-sidebar-bg-color: var(--tt-gray-dark-100);
