@@ -122,7 +122,7 @@ export default function LoginPage() {
               >
                 <LogIn className="w-8 h-8 text-white" />
               </motion.div>
-              <CardTitle className="text-2xl font-bold text-slate-800">Welcome Back</CardTitle>
+              <CardTitle className="text-2xl font-normal italic text-slate-800">Welcome Back</CardTitle>
               <CardDescription className="text-slate-600">
                 Sign in to your account to continue
               </CardDescription>
