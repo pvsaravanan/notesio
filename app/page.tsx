@@ -1,9 +1,21 @@
-import LandingPage from "@/clarify_landingpage/app/page"
+import { Background } from "@/components/landing-page/background"
+import { Footer } from "@/components/landing-page/footer"
+import { Hero } from "@/components/landing-page/hero"
+import { VideoPreview } from "@/components/landing-page/video-preview"
 
-export default function HomePage() {
+export default function Home() {
   return (
-    <div className="clarify-landing">
-      <LandingPage />
-    </div>
+    <main className="p-inset h-[100dvh] w-full">
+      <div className="relative h-full w-full">
+        <Background src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/6630c6a18475e11eb9c431f89de4698c%20%281%29-0BqOUuQxMRffdYWkMpS0J5Ql2lX38s.jpg" />
+        <Hero />
+        <Footer />
+        <VideoPreview 
+          src="/videos/clarify-demo.mp4"
+          placeholder="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/6630c6a18475e11eb9c431f89de4698c%20%281%29-0BqOUuQxMRffdYWkMpS0J5Ql2lX38s.jpg"
+          title="Watch Video"
+        />
+      </div>
+    </main>
   )
 }

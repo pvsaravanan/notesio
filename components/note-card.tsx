@@ -5,10 +5,10 @@ import { motion } from "framer-motion"
 import { Edit3, X } from "lucide-react"
 
 interface Note {
-  id: number
+  id: string
   title: string
   content: string
-  createdAt: Date
+  createdAt: string
 }
 
 interface NoteCardProps {
@@ -16,7 +16,7 @@ interface NoteCardProps {
   index: number
   onNoteClick: (note: Note) => void
   onEditNote: (note: Note) => void
-  onDeleteNote: (id: number) => void
+  onDeleteNote: (id: string) => void
 }
 
 const NoteCard = React.memo<NoteCardProps>(({
@@ -107,7 +107,7 @@ const NoteCard = React.memo<NoteCardProps>(({
       
       {/* Creation time */}
       <div className="text-xs text-muted-foreground/60 mt-3 pt-3 border-t border-border/50">
-        {note.createdAt.toLocaleDateString('en-US', {
+        {new Date(note.createdAt).toLocaleDateString('en-US', {
           month: 'short',
           day: 'numeric',
           year: 'numeric',

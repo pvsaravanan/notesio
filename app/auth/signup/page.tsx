@@ -11,7 +11,7 @@ import { Loader2, Mail, Lock, Eye, EyeOff, User, UserPlus, Chrome } from "lucide
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { auth, googleProvider } from "@/lib/firebase"
-import { createUserWithEmailAndPassword, signInWithPopup } from "firebase/auth"
+import { createUserWithEmailAndPassword, signInWithPopup, onAuthStateChanged } from "firebase/auth"
 
 export default function SignupPage() {
   const [email, setEmail] = useState("")
@@ -25,7 +25,7 @@ export default function SignupPage() {
   const router = useRouter()
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((user: any) => {
+    const unsubscribe = onAuthStateChanged(auth, (user: any) => {
       if (user) {
         router.push("/notes")
       }

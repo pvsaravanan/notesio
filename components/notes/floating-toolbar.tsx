@@ -1,7 +1,7 @@
 "use client";
 
 import { type Editor } from "@tiptap/react";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Bold,
   Italic,
@@ -28,6 +28,7 @@ export function FloatingToolbar({ editor }: FloatingToolbarProps) {
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
   const [isVisible, setIsVisible] = useState(false);
   const [copied, setCopied] = useState(false);
+  const toolbarRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const updatePosition = () => {
@@ -46,9 +47,42 @@ export function FloatingToolbar({ editor }: FloatingToolbarProps) {
       const selectionCenter = (startPos.left + endPos.left) / 2;
       const selectionTop = Math.min(startPos.top, endPos.top);
 
+      // Use actual measured width if available, otherwise estimate
+      const toolbarWidth = toolbarRef.current?.offsetWidth ?? 520;
+      const toolbarHeight = toolbarRef.current?.offsetHeight ?? 40;
+      const padding = 8;
+
+      // Use editor's left edge as minimum boundary (accounts for sidebar)
+      const editorRect = editor.view.dom.getBoundingClientRect();
+      const leftBoundary = editorRect.left;
+
+      let clampedLeft = selectionCenter;
+      let clampedTop = selectionTop - toolbarHeight - 8;
+
+      // Prevent going off the left edge (past sidebar/editor boundary)
+      if (clampedLeft - toolbarWidth / 2 < leftBoundary) {
+        clampedLeft = leftBoundary + toolbarWidth / 2;
+      }
+
+      // Prevent going off the right edge
+      if (clampedLeft + toolbarWidth / 2 > window.innerWidth - padding) {
+        clampedLeft = window.innerWidth - toolbarWidth / 2 - padding;
+      }
+
+      // If toolbar would go above viewport, show below selection
+      if (clampedTop < padding) {
+        const selectionBottom = Math.max(startPos.bottom, endPos.bottom);
+        clampedTop = selectionBottom + 8;
+      }
+
+      // If toolbar would go below viewport, clamp to bottom
+      if (clampedTop + toolbarHeight > window.innerHeight - padding) {
+        clampedTop = window.innerHeight - toolbarHeight - padding;
+      }
+
       setPosition({
-        top: selectionTop - 50,
-        left: selectionCenter,
+        top: clampedTop,
+        left: clampedLeft,
       });
       setIsVisible(true);
     };
@@ -92,11 +126,15 @@ export function FloatingToolbar({ editor }: FloatingToolbarProps) {
 
   return (
     <div
-      className="fixed z-50 flex items-center gap-0.5 p-1.5 bg-popover border border-border rounded-lg shadow-lg"
+      ref={toolbarRef}
+      className="fixed flex items-center gap-0.5 px-1 py-0.5 bg-popover border border-border rounded-md shadow-xl"
       style={{
         top: position.top,
         left: position.left,
         transform: "translateX(-50%)",
+        backdropFilter: "blur(12px)",
+        maxWidth: "calc(100vw - 16px)",
+        zIndex: 9999,
       }}
     >
       <ToolbarBtn
@@ -205,8 +243,8 @@ function ToolbarBtn({
   return (
     <button
       onClick={onClick}
-      className={`p-1.5 rounded hover:bg-accent transition-colors ${
-        isActive ? "bg-accent text-accent-foreground" : "text-muted-foreground"
+      className={`p-1.5 rounded-sm transition-colors duration-100 ${
+        isActive ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground"
       }`}
       title={label}
     >

@@ -18,7 +18,7 @@ import Subscript from "@tiptap/extension-subscript";
 import Superscript from "@tiptap/extension-superscript";
 import { useCallback, useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Cloud, CloudOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Sidebar from "@/components/sidebar";
 import ProtectedRoute from "@/components/protected-route";
@@ -29,10 +29,10 @@ import { SlashCommandMenu } from "@/components/notes/slash-command-menu";
 import { DrawingModal } from "@/components/notes/drawing-modal";
 import { DragHandle } from "@/components/notes/drag-handle-extension";
 import { useAuth } from "@/contexts/auth-context";
-import { saveNoteToLocal, saveNoteToFirestore } from "@/lib/notes-service";
+import { saveDraft, clearDraft, saveNoteOnLeave } from "@/lib/notes-service";
 
 interface NoteEditorProps {
-  noteId?: number;
+  noteId?: string;
   initialTitle?: string;
   initialContent?: string;
   isEditing?: boolean;
@@ -53,12 +53,13 @@ export function NoteEditor({
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashMenuPosition, setSlashMenuPosition] = useState({ top: 0, left: 0 });
   const [showDrawingModal, setShowDrawingModal] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "offline">("idle");
   const imageInputRef = useRef<HTMLInputElement>(null);
 
   // Refs for values accessed inside editor closures
   const showSlashMenuRef = useRef(false);
   const titleRef = useRef(title);
-  const noteIdRef = useRef(noteId ?? Date.now());
+  const noteIdRef = useRef<string>((noteId ?? Date.now()).toString());
 
   // Keep refs in sync
   useEffect(() => {
@@ -77,8 +78,17 @@ export function NoteEditor({
         orderedList: { keepMarks: true, keepAttributes: false },
       }),
       Placeholder.configure({
-        placeholder: "Type '/' for commands",
+        placeholder: ({ node }) => {
+          if (node.type.name === "heading") {
+            const level = node.attrs.level;
+            return `Heading ${level}`;
+          }
+          return "Type '/' for commands, or start writing...";
+        },
         emptyEditorClass: "is-editor-empty",
+        emptyNodeClass: "is-empty",
+        showOnlyWhenEditable: true,
+        showOnlyCurrent: true,
       }),
       TaskList,
       TaskItem.configure({ nested: true }),
@@ -101,7 +111,8 @@ export function NoteEditor({
     editorProps: {
       attributes: {
         class:
-          "prose prose-neutral dark:prose-invert max-w-none focus:outline-none min-h-[70vh] pl-8 pr-4 py-2 notion-editor",
+          "prose prose-neutral dark:prose-invert max-w-none focus:outline-none min-h-[70vh] pl-12 pr-4 py-2 notion-editor",
+        spellcheck: "true",
       },
       handleKeyDown: (_view, event) => {
         // When slash menu is open, intercept navigation keys so ProseMirror ignores them
@@ -150,7 +161,7 @@ export function NoteEditor({
     setTitle(initialTitle);
   }, [initialTitle]);
 
-  // --- Auto-save to localStorage (debounced 2s) ---
+  // --- Auto-save to draft (debounced 2s, crash-recovery only) ---
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -158,16 +169,19 @@ export function NoteEditor({
 
     const handleUpdate = () => {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+      setSaveStatus("saving");
       autoSaveTimerRef.current = setTimeout(() => {
         const content = editor.getHTML();
         const noteTitle = titleRef.current.trim() || "Untitled";
-        saveNoteToLocal({
+        saveDraft({
           id: noteIdRef.current,
           title: noteTitle,
           content,
           createdAt: createdAt || new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         });
+        setSaveStatus("saved");
+        setTimeout(() => setSaveStatus("idle"), 2000);
       }, 2000);
     };
 
@@ -178,14 +192,14 @@ export function NoteEditor({
     };
   }, [editor, createdAt]);
 
-  // Also auto-save when title changes
+  // Also auto-save draft when title changes
   useEffect(() => {
     if (!editor) return;
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     autoSaveTimerRef.current = setTimeout(() => {
       const content = editor.getHTML();
       const noteTitle = title.trim() || "Untitled";
-      saveNoteToLocal({
+      saveDraft({
         id: noteIdRef.current,
         title: noteTitle,
         content,
@@ -195,13 +209,13 @@ export function NoteEditor({
     }, 2000);
   }, [title, editor, createdAt]);
 
-  // Save to localStorage on beforeunload as fallback
+  // Save draft on beforeunload as fallback
   useEffect(() => {
     const handleBeforeUnload = () => {
       if (!editor) return;
       const content = editor.getHTML();
       const noteTitle = titleRef.current.trim() || "Untitled";
-      saveNoteToLocal({
+      saveDraft({
         id: noteIdRef.current,
         title: noteTitle,
         content,
@@ -213,38 +227,36 @@ export function NoteEditor({
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [editor, createdAt]);
 
-  // --- Explicit save (Ctrl+S) with duplicate-title check ---
-  const handleExplicitSave = useCallback(() => {
-    if (!editor) return;
+  // --- Explicit save (Ctrl+S) — push to Firestore, clear draft ---
+  const handleExplicitSave = useCallback(async () => {
+    if (!editor || !user?.uid) return;
 
+    setSaveStatus("saving");
     const content = editor.getHTML();
     const noteTitle = title.trim() || "Untitled";
-    const savedNotes = JSON.parse(localStorage.getItem("notes") || "[]");
 
-    const duplicateNote = savedNotes.find(
-      (note: any) =>
-        note.title.toLowerCase() === noteTitle.toLowerCase() &&
-        note.id !== noteIdRef.current
-    );
-    if (duplicateNote) {
-      setShowDuplicateModal(true);
-      return;
-    }
-
-    saveNoteToLocal({
+    const noteData = {
       id: noteIdRef.current,
       title: noteTitle,
       content,
       createdAt: createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-    });
+    };
+
+    try {
+      // Push to Firestore (or queue if offline)
+      await saveNoteOnLeave(user.uid, noteData);
+      setSaveStatus("saved");
+    } catch {
+      setSaveStatus("offline");
+    }
 
     router.push("/notes");
-  }, [title, editor, router, createdAt]);
+  }, [title, editor, router, createdAt, user]);
 
-  // --- Navigate back: save to localStorage + Firebase ---
+  // --- Navigate back: push to Firestore (or queue if offline), clear draft ---
   const handleBack = useCallback(async () => {
-    if (editor) {
+    if (editor && user?.uid) {
       const content = editor.getHTML();
       const noteTitle = titleRef.current.trim() || "Untitled";
       const noteData = {
@@ -255,15 +267,11 @@ export function NoteEditor({
         updatedAt: new Date().toISOString(),
       };
 
-      // Save to localStorage immediately
-      saveNoteToLocal(noteData);
-
-      // Save to Firebase in background
-      if (user?.uid) {
-        saveNoteToFirestore(user.uid, noteData).catch((err) =>
-          console.error("Firebase save failed:", err)
-        );
-      }
+      // Push to Firestore (or queue if offline) — clears draft internally
+      await saveNoteOnLeave(user.uid, noteData);
+    } else {
+      // No user (shouldn't happen behind ProtectedRoute, but just in case)
+      clearDraft();
     }
     router.push("/notes");
   }, [editor, router, user, createdAt]);
@@ -346,7 +354,7 @@ export function NoteEditor({
 
         {/* Header */}
         <header className="fixed top-0 left-14 right-0 z-40 bg-background/80 backdrop-blur-sm ">
-          <div className="relative h-12 flex items-center">
+          <div className="relative h-12 flex items-center justify-center">
             <Button
               variant="ghost"
               size="icon"
@@ -355,6 +363,33 @@ export function NoteEditor({
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>
+
+            {/* Auto-save status */}
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground select-none">
+              {saveStatus === "saving" && (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <span>Saving...</span>
+                </>
+              )}
+              {saveStatus === "saved" && (
+                <>
+                  <Cloud className="h-3.5 w-3.5" />
+                  <span>Saved to cloud</span>
+                </>
+              )}
+              {saveStatus === "offline" && (
+                <>
+                  <CloudOff className="h-3.5 w-3.5" />
+                  <span>Saved offline</span>
+                </>
+              )}
+              {saveStatus === "idle" && (
+                <>
+                  <Cloud className="h-3.5 w-3.5 opacity-40" />
+                </>
+              )}
+            </div>
           </div>
         </header>
 
@@ -373,7 +408,7 @@ export function NoteEditor({
                     editor?.chain().focus().run();
                   }
                 }}
-                className="text-4xl font-serif italic bg-transparent px-2 placeholder:text-muted-foreground/30 placeholder:font-serif focus:outline-none py-3 w-full overflow-visible"
+                className="text-[40px] font-serif italic font-normal tracking-tight bg-transparent px-2 placeholder:text-muted-foreground/30 placeholder:font-normal focus:outline-none py-3 w-full overflow-visible leading-tight"
               />
               <div className="h-px bg-border mt-4" />
             </div>

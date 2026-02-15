@@ -10,37 +10,54 @@ import { DeleteConfirmationModal } from "@/components/delete-confirmation-modal"
 import ProtectedRoute from "@/components/protected-route"
 import NextLink from "next/link"
 import { useRouter } from "next/navigation"
+import { useAuth } from "@/contexts/auth-context"
+import { 
+  getNotesFromFirestore, 
+  deleteNoteFromFirestore, 
+  queuePendingDelete,
+  NoteData 
+} from "@/lib/notes-service"
 
 interface Note {
-  id: number
+  id: string
   title: string
   content: string
-  createdAt: Date
+  createdAt: string
 }
 
 export default function MyMindApp() {
   const router = useRouter()
+  const { user } = useAuth()
   const [notes, setNotes] = useState<Note[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [notesLayout, setNotesLayout] = useState<"2" | "3" | "4">("4")
   const [activeTab, setActiveTab] = useState<"everything" | "spaces" | "serendipity">("everything")
-  const [noteToDelete, setNoteToDelete] = useState<number | null>(null)
+  const [noteToDelete, setNoteToDelete] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
 
-  // Load notes from localStorage on mount
+  // Load notes from Firestore only (single source of truth)
   useEffect(() => {
-    const savedNotes = localStorage.getItem("notes")
-    if (savedNotes) {
-      try {
-        const parsed = JSON.parse(savedNotes)
-        setNotes(parsed.map((note: any) => ({
-          ...note,
-          createdAt: new Date(note.createdAt),
-        })))
-      } catch (e) {
-        console.error("Failed to parse notes:", e)
+    async function loadNotes() {
+      if (!user?.uid) {
+        setLoading(false)
+        return
       }
+      try {
+        const firestoreNotes = await getNotesFromFirestore(user.uid)
+        setNotes(firestoreNotes.map((n) => ({
+          id: n.id,
+          title: n.title,
+          content: n.content,
+          createdAt: n.createdAt,
+        })))
+      } catch (error) {
+        console.error("Failed to load notes:", error)
+      }
+      setLoading(false)
     }
-  }, [])
+
+    loadNotes()
+  }, [user])
 
   const filteredNotes = useMemo(() => {
     if (!searchQuery) return notes
@@ -74,23 +91,30 @@ export default function MyMindApp() {
     [router],
   )
 
-  const handleDeleteNote = useCallback((id: number) => {
+  const handleDeleteNote = useCallback((id: string) => {
     setNoteToDelete(id)
   }, [])
 
-  const handleConfirmDelete = useCallback(() => {
-    if (noteToDelete) {
-      setNotes((prev) => {
-        const updated = prev.filter((note) => note.id !== noteToDelete)
-        localStorage.setItem(
-          "notes",
-          JSON.stringify(updated.map((n) => ({ ...n, createdAt: n.createdAt.toISOString() }))),
-        )
-        return updated
-      })
+  const handleConfirmDelete = useCallback(async () => {
+    if (noteToDelete && user?.uid) {
+      // Remove from UI immediately
+      setNotes((prev) => prev.filter((note) => note.id !== noteToDelete))
+
+      // Delete from Firestore (or queue if offline)
+      if (navigator.onLine) {
+        try {
+          await deleteNoteFromFirestore(user.uid, noteToDelete)
+        } catch (error) {
+          console.error("Failed to delete from Firestore:", error)
+          queuePendingDelete(user.uid, noteToDelete)
+        }
+      } else {
+        queuePendingDelete(user.uid, noteToDelete)
+      }
+
       setNoteToDelete(null)
     }
-  }, [noteToDelete])
+  }, [noteToDelete, user])
 
   useEffect(() => {
     try {

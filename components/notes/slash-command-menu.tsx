@@ -155,7 +155,7 @@ export function SlashCommandMenu({
   const deleteSlashText = useCallback(() => {
     const { state } = editor;
     const { from } = state.selection;
-    const textBefore = state.doc.textBetween(Math.max(0, from - 20), from);
+    const textBefore = state.doc.textBetween(Math.max(0, from - 50), from);
     const slashIndex = textBefore.lastIndexOf("/");
 
     if (slashIndex !== -1) {
@@ -222,18 +222,30 @@ export function SlashCommandMenu({
     }
   }, [selectedIndex]);
 
+  // Track text after "/" in real time — close if slash is removed
   useEffect(() => {
-    const { state } = editor;
-    const { from } = state.selection;
-    const textBefore = state.doc.textBetween(Math.max(0, from - 20), from);
-    const slashIndex = textBefore.lastIndexOf("/");
+    const handleUpdate = () => {
+      const { state } = editor;
+      const { from } = state.selection;
+      const textBefore = state.doc.textBetween(Math.max(0, from - 50), from);
+      const slashIndex = textBefore.lastIndexOf("/");
 
-    if (slashIndex !== -1) {
+      if (slashIndex === -1) {
+        // The "/" was deleted — close the menu
+        onClose();
+        return;
+      }
+
       const search = textBefore.substring(slashIndex + 1);
       setSearchTerm(search);
       setSelectedIndex(0);
-    }
-  }, [editor]);
+    };
+
+    editor.on("update", handleUpdate);
+    return () => {
+      editor.off("update", handleUpdate);
+    };
+  }, [editor, onClose]);
 
   const getGlobalIndex = (sectionIndex: number, commandIndex: number): number => {
     let count = 0;
@@ -251,7 +263,7 @@ export function SlashCommandMenu({
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 10, scale: 0.95 }}
         transition={{ duration: 0.15, ease: "easeOut" }}
-        className="slash-command-menu absolute z-50 w-72 bg-popover dark:bg-[#1a1a1a] rounded-xl shadow-2xl border border-border dark:border-white/10 max-h-80 overflow-y-auto py-2"
+        className="slash-command-menu slash-command-scroll absolute z-50 w-72 bg-popover dark:bg-[#252525] rounded-lg shadow-2xl border border-border dark:border-white/10 max-h-80 overflow-y-auto py-1.5"
         style={{
           top: position.top,
           left: position.left,
